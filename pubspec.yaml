@@ -58,6 +58,10 @@ dependencies:
   # Sharing / export
   share_plus: ^10.0.2
 
+  # PDF generation & preview
+  pdf: ^3.11.0
+  printing: ^5.13.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
