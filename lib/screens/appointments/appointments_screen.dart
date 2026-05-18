@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
@@ -9,6 +14,158 @@ import 'book_appointment_sheet.dart';
 
 class AppointmentsScreen extends StatelessWidget {
   const AppointmentsScreen({super.key});
+
+  Future<void> _exportPdf(BuildContext context) async {
+    final state = context.read<AppState>();
+    final appts = state.appointments;
+    await Printing.layoutPdf(
+      name: 'GenSalon_Appointments',
+      onLayout: (_) => _buildPdf(appts, state),
+    );
+  }
+
+  Future<Uint8List> _buildPdf(
+      List<Appointment> appts, AppState state) async {
+    final pdf = pw.Document();
+    final purple = PdfColor.fromHex('#A855F7');
+    final purpleDark = PdfColor.fromHex('#7E22CE');
+    final grey = PdfColor.fromHex('#6B7280');
+    final greyLight = PdfColor.fromHex('#F3F4F6');
+
+    String clientName(int id) {
+      try { return state.clients.firstWhere((c) => c.id == id).name; } catch (_) { return 'Unknown'; }
+    }
+    String staffName(int id) {
+      try { return state.staffList.firstWhere((s) => s.id == id).name; } catch (_) { return 'Unknown'; }
+    }
+    String serviceName(int id) {
+      try { return state.services.firstWhere((s) => s.id == id).name; } catch (_) { return 'Unknown'; }
+    }
+    String statusLabel(AppointmentStatus s) {
+      switch (s) {
+        case AppointmentStatus.scheduled: return 'Scheduled';
+        case AppointmentStatus.completed: return 'Completed';
+        case AppointmentStatus.cancelled: return 'Cancelled';
+        case AppointmentStatus.noShow: return 'No-Show';
+      }
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (_) => pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: pw.BoxDecoration(
+            gradient: pw.LinearGradient(
+                colors: [purpleDark, purple],
+                begin: pw.Alignment.topLeft,
+                end: pw.Alignment.bottomRight),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.RichText(
+                text: pw.TextSpan(children: [
+                  pw.TextSpan(
+                      text: 'Gen',
+                      style: pw.TextStyle(
+                          fontSize: 22,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.TextSpan(
+                      text: 'Salon',
+                      style: pw.TextStyle(
+                          fontSize: 22,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromHex('#E9D5FF'))),
+                ]),
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('APPOINTMENTS LIST',
+                      style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 9,
+                          letterSpacing: 1.5,
+                          fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Generated: ${dateFmt.format(DateTime.now())}',
+                      style: pw.TextStyle(
+                          color: PdfColor.fromHex('#E9D5FF'), fontSize: 8)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        footer: (ctx) => pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('GenSalon — Your General Salon',
+                style: pw.TextStyle(fontSize: 8, color: grey)),
+            pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+                style: pw.TextStyle(fontSize: 8, color: grey)),
+          ],
+        ),
+        build: (ctx) => [
+          pw.SizedBox(height: 16),
+          pw.Text('Total: ${appts.length} appointment${appts.length == 1 ? '' : 's'}',
+              style: pw.TextStyle(fontSize: 10, color: grey)),
+          pw.SizedBox(height: 10),
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(3),
+              1: const pw.FlexColumnWidth(3),
+              2: const pw.FlexColumnWidth(2),
+              3: const pw.FlexColumnWidth(3),
+              4: const pw.FlexColumnWidth(2),
+            },
+            children: [
+              // Header row
+              pw.TableRow(
+                decoration: pw.BoxDecoration(color: purple),
+                children: [
+                  'CLIENT', 'SERVICE', 'STAFF', 'DATE & TIME', 'STATUS'
+                ].map((h) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: pw.Text(h,
+                      style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 0.8)),
+                )).toList(),
+              ),
+              // Data rows
+              ...appts.asMap().entries.map((e) {
+                final i = e.key;
+                final a = e.value;
+                return pw.TableRow(
+                  decoration: pw.BoxDecoration(
+                      color: i.isEven ? PdfColors.white : greyLight),
+                  children: [
+                    clientName(a.clientId),
+                    serviceName(a.serviceId),
+                    staffName(a.staffId),
+                    '${dateFmt.format(a.startAt)}\n${timeFmt.format(a.startAt)}',
+                    statusLabel(a.status),
+                  ].map((t) => pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 6),
+                    child: pw.Text(t,
+                        style: pw.TextStyle(fontSize: 9, color: PdfColors.black)),
+                  )).toList(),
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+    return Uint8List.fromList(await pdf.save());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,21 +201,38 @@ class AppointmentsScreen extends StatelessWidget {
                 itemBuilder: (_, i) => _ApptCard(appt: appts[i]),
               ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: AppColors.surface,
-          shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          builder: (_) => ChangeNotifierProvider.value(
-            value: context.read<AppState>(),
-            child: const BookAppointmentSheet(),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: 'export_appts',
+            onPressed: () => _exportPdf(context),
+            backgroundColor: AppColors.surfaceAlt,
+            foregroundColor: AppColors.purple,
+            mini: true,
+            tooltip: 'Export PDF',
+            child: const Icon(Icons.picture_as_pdf_outlined),
           ),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('Book Appointment'),
-        backgroundColor: AppColors.purple,
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'book_appt',
+            onPressed: () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: AppColors.surface,
+              shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              builder: (_) => ChangeNotifierProvider.value(
+                value: context.read<AppState>(),
+                child: const BookAppointmentSheet(),
+              ),
+            ),
+            icon: const Icon(Icons.add),
+            label: const Text('Book Appointment'),
+            backgroundColor: AppColors.purple,
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
@@ -87,8 +261,6 @@ class _ApptCard extends StatelessWidget {
       serviceName =
           state.services.firstWhere((s) => s.id == appt.serviceId).name;
     } catch (_) {}
-
-    final statusColor = _statusColor(appt.status);
 
     return Card(
       child: Padding(
@@ -204,12 +376,6 @@ class _ApptCard extends StatelessWidget {
     if (ok == true) await context.read<AppState>().deleteAppointment(a.id!);
   }
 
-  Color _statusColor(AppointmentStatus s) => {
-        AppointmentStatus.scheduled: AppColors.purple,
-        AppointmentStatus.completed: const Color(0xFF10B981),
-        AppointmentStatus.cancelled: const Color(0xFFEF4444),
-        AppointmentStatus.noShow: const Color(0xFFF59E0B),
-      }[s]!;
 }
 
 class _StatusChip extends StatelessWidget {
