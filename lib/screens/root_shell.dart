@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
-import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import 'appointments/appointments_screen.dart';
