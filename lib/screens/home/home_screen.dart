@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/models.dart';
 import '../../providers/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/formatters.dart';
@@ -19,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final cols = Responsive.gridCols(context);
 
     return RefreshIndicator(
       onRefresh: () => context.read<AppState>().refreshDashboard(),
@@ -35,40 +35,45 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
 
-              // Stats grid
-              GridView.count(
-                crossAxisCount: cols,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.6,
+              // Row 1 — Clients & Staff side by side
+              Row(
                 children: [
-                  StatCard(
-                    label: 'Total Clients',
-                    value: '${state.clientCount}',
-                    icon: Icons.people_outline,
-                    color: const Color(0xFF3B82F6),
+                  Expanded(
+                    child: StatCard(
+                      label: 'Total Clients',
+                      value: '${state.clientCount}',
+                      icon: Icons.people_outline,
+                      color: const Color(0xFF3B82F6),
+                    ),
                   ),
-                  StatCard(
-                    label: 'Active Staff',
-                    value: '${state.staffCount}',
-                    icon: Icons.person_outline,
-                    color: const Color(0xFF10B981),
-                  ),
-                  StatCard(
-                    label: "Today's Appts",
-                    value: '${state.todayAppointments}',
-                    icon: Icons.calendar_today_outlined,
-                    color: const Color(0xFFF59E0B),
-                  ),
-                  StatCard(
-                    label: "Today's Sales",
-                    value: formatPeso(state.todaySales),
-                    icon: Icons.payments_outlined,
-                    color: AppColors.purple,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: StatCard(
+                      label: 'Active Staff',
+                      value: '${state.staffCount}',
+                      icon: Icons.person_outline,
+                      color: const Color(0xFF10B981),
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+
+              // Row 2 — Today's Appointments (full width)
+              StatCard(
+                label: "Today's Appointments",
+                value: '${state.todayAppointments}',
+                icon: Icons.calendar_today_outlined,
+                color: const Color(0xFFF59E0B),
+              ),
+              const SizedBox(height: 12),
+
+              // Row 3 — Today's Sales (full width, no overflow risk)
+              StatCard(
+                label: "Today's Sales",
+                value: formatPeso(state.todaySales),
+                icon: Icons.payments_outlined,
+                color: AppColors.purple,
               ),
 
               const SizedBox(height: 24),
@@ -148,7 +153,7 @@ class _ApptTile extends StatelessWidget {
   final String clientName;
   final String serviceName;
   final DateTime startAt;
-  final dynamic status;
+  final AppointmentStatus status;
 
   const _ApptTile({
     required this.clientName,
@@ -157,14 +162,24 @@ class _ApptTile extends StatelessWidget {
     required this.status,
   });
 
+  static const _statusColors = {
+    AppointmentStatus.scheduled: AppColors.purple,
+    AppointmentStatus.completed: Color(0xFF10B981),
+    AppointmentStatus.cancelled: Color(0xFFEF4444),
+    AppointmentStatus.noShow: Color(0xFFF59E0B),
+  };
+
+  static const _statusLabels = {
+    AppointmentStatus.scheduled: 'Scheduled',
+    AppointmentStatus.completed: 'Completed',
+    AppointmentStatus.cancelled: 'Cancelled',
+    AppointmentStatus.noShow: 'No-Show',
+  };
+
   @override
   Widget build(BuildContext context) {
-    final statusColor = {
-      'scheduled': AppColors.purple,
-      'completed': const Color(0xFF10B981),
-      'cancelled': const Color(0xFFEF4444),
-      'noShow': const Color(0xFFF59E0B),
-    }[status.name] ?? AppColors.purple;
+    final statusColor = _statusColors[status] ?? AppColors.purple;
+    final statusLabel = _statusLabels[status] ?? 'Unknown';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -184,8 +199,11 @@ class _ApptTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            status.name,
-            style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600),
+            statusLabel,
+            style: TextStyle(
+                color: statusColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600),
           ),
         ),
       ),

@@ -367,9 +367,18 @@ class _ReportsScreenState extends State<ReportsScreen>
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Page title
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Reports',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          ),
+        ),
         // Tab bar
         Container(
-          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
           decoration: BoxDecoration(
             color: AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(12),

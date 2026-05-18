@@ -29,9 +29,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return Column(
       children: [
+        // Page title
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('History',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          ),
+        ),
         // Filter chips
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(

@@ -1,9 +1,41 @@
 import 'package:flutter/material.dart';
 
+import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _remindersEnabled = true;
+  bool _loadingPrefs = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final enabled = await NotificationService.instance.isRemindersEnabled();
+    if (mounted) setState(() { _remindersEnabled = enabled; _loadingPrefs = false; });
+  }
+
+  Future<void> _toggleReminders(bool value) async {
+    setState(() => _remindersEnabled = value);
+    await NotificationService.instance.setRemindersEnabled(value);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(value
+            ? 'Appointment reminders enabled'
+            : 'Appointment reminders disabled'),
+        duration: const Duration(seconds: 2),
+      ));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,46 +47,64 @@ class SettingsScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _section('App Info', [
-            _tile(Icons.info_outline, 'App Name', 'GenSalon – General Salon Manager'),
-            _tile(Icons.tag, 'Version', '1.0.0'),
-          ]),
-          const SizedBox(height: 16),
-          _section('Notifications', [
-            _switchTile(
-              context,
-              Icons.notifications_outlined,
-              'Appointment Reminders',
-              'Get notified 30 min before appointments',
-              true,
+      body: _loadingPrefs
+          ? const Center(child: CircularProgressIndicator(color: AppColors.purple))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _section('App Info', [
+                  _tile(Icons.info_outline, 'App Name',
+                      'GenSalon – General Salon Manager'),
+                  _tile(Icons.tag, 'Version', '1.0.0'),
+                ]),
+                const SizedBox(height: 16),
+                _section('Notifications', [
+                  SwitchListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16),
+                    secondary: CircleAvatar(
+                      backgroundColor: AppColors.purple.withOpacity(0.15),
+                      child: const Icon(Icons.notifications_outlined,
+                          color: AppColors.purple, size: 20),
+                    ),
+                    title: const Text('Appointment Reminders',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                    subtitle: const Text(
+                        'Get notified 30 min before appointments',
+                        style: TextStyle(
+                            color: AppColors.textMuted, fontSize: 12)),
+                    value: _remindersEnabled,
+                    activeColor: AppColors.purple,
+                    onChanged: _toggleReminders,
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                _section('Data', [
+                  ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16),
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0x26EF4444),
+                      child: Icon(Icons.delete_sweep_outlined,
+                          color: Color(0xFFEF4444), size: 20),
+                    ),
+                    title: const Text('Clear All Data',
+                        style: TextStyle(color: Color(0xFFEF4444))),
+                    subtitle: const Text('Permanently delete all records',
+                        style: TextStyle(
+                            color: AppColors.textMuted, fontSize: 12)),
+                    onTap: () => _confirmClear(context),
+                  ),
+                ]),
+                const SizedBox(height: 32),
+                const Center(
+                  child: Text('Made with ❤ for GenSalon',
+                      style: TextStyle(
+                          color: AppColors.textMuted, fontSize: 12)),
+                ),
+              ],
             ),
-          ]),
-          const SizedBox(height: 16),
-          _section('Data', [
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              leading: const CircleAvatar(
-                backgroundColor: Color(0x26EF4444),
-                child: Icon(Icons.delete_sweep_outlined,
-                    color: Color(0xFFEF4444), size: 20),
-              ),
-              title: const Text('Clear All Data',
-                  style: TextStyle(color: Color(0xFFEF4444))),
-              subtitle: const Text('Permanently delete all records',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-              onTap: () => _confirmClear(context),
-            ),
-          ]),
-          const SizedBox(height: 32),
-          const Center(
-            child: Text('Made with ❤ for GenSalon',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -88,26 +138,6 @@ class SettingsScreen extends StatelessWidget {
       subtitle: Text(subtitle,
           style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
     );
-  }
-
-  Widget _switchTile(BuildContext context, IconData icon, String title,
-      String subtitle, bool value) {
-    return StatefulBuilder(builder: (_, set) {
-      return SwitchListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        secondary: CircleAvatar(
-          backgroundColor: AppColors.purple.withOpacity(0.15),
-          child: Icon(icon, color: AppColors.purple, size: 20),
-        ),
-        title: Text(title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-        subtitle: Text(subtitle,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-        value: value,
-        activeColor: AppColors.purple,
-        onChanged: (v) => set(() {}),
-      );
-    });
   }
 
   Future<void> _confirmClear(BuildContext context) async {

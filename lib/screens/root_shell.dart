@@ -112,6 +112,8 @@ class _RootShellState extends State<RootShell> {
               currentIndex: _currentIndex,
               onTap: (i) => setState(() => _currentIndex = i),
               type: BottomNavigationBarType.fixed,
+              showSelectedLabels: false,
+              showUnselectedLabels: false,
               items: List.generate(
                 4,
                 (i) => BottomNavigationBarItem(

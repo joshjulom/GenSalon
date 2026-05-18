@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../providers/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/formatters.dart';
+import '../modals/sale_receipt_modal.dart';
 import 'book_appointment_sheet.dart';
 
 class AppointmentsScreen extends StatelessWidget {
@@ -167,6 +168,53 @@ class AppointmentsScreen extends StatelessWidget {
     return Uint8List.fromList(await pdf.save());
   }
 
+  void _openBookSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => ChangeNotifierProvider.value(
+        value: context.read<AppState>(),
+        child: const BookAppointmentSheet(),
+      ),
+    );
+  }
+
+  Widget _headerRow(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text('Appointments',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              color: AppColors.purple,
+              tooltip: 'Export PDF',
+              onPressed: () => _exportPdf(context),
+            ),
+            FilledButton.icon(
+              onPressed: () => _openBookSheet(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Book'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.purple,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -179,9 +227,10 @@ class AppointmentsScreen extends StatelessWidget {
         color: AppColors.purple,
         child: appts.isEmpty
             ? ListView(
-                children: const [
-                  SizedBox(height: 120),
-                  Center(
+                children: [
+                  _headerRow(context),
+                  const SizedBox(height: 80),
+                  const Center(
                     child: Column(
                       children: [
                         Icon(Icons.calendar_month_outlined,
@@ -195,46 +244,15 @@ class AppointmentsScreen extends StatelessWidget {
                 ],
               )
             : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                itemCount: appts.length,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                itemCount: appts.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) => _ApptCard(appt: appts[i]),
+                itemBuilder: (_, i) {
+                  if (i == 0) return _headerRow(context);
+                  return _ApptCard(appt: appts[i - 1]);
+                },
               ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'export_appts',
-            onPressed: () => _exportPdf(context),
-            backgroundColor: AppColors.surfaceAlt,
-            foregroundColor: AppColors.purple,
-            mini: true,
-            tooltip: 'Export PDF',
-            child: const Icon(Icons.picture_as_pdf_outlined),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton.extended(
-            heroTag: 'book_appt',
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: AppColors.surface,
-              shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-              builder: (_) => ChangeNotifierProvider.value(
-                value: context.read<AppState>(),
-                child: const BookAppointmentSheet(),
-              ),
-            ),
-            icon: const Icon(Icons.add),
-            label: const Text('Book Appointment'),
-            backgroundColor: AppColors.purple,
-          ),
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
@@ -344,6 +362,10 @@ class _ApptCard extends StatelessWidget {
       );
 
   Future<void> _updateStatus(BuildContext context, Appointment a, AppointmentStatus s) async {
+    if (s == AppointmentStatus.completed) {
+      await _completeWithSale(context, a);
+      return;
+    }
     final updated = Appointment(
       id: a.id,
       clientId: a.clientId,
@@ -355,6 +377,75 @@ class _ApptCard extends StatelessWidget {
       notes: a.notes,
     );
     await context.read<AppState>().updateAppointment(updated);
+  }
+
+  Future<void> _completeWithSale(BuildContext context, Appointment a) async {
+    final state = context.read<AppState>();
+
+    Service? service;
+    try {
+      service = state.services.firstWhere((s) => s.id == a.serviceId);
+    } catch (_) {}
+
+    final paymentMethod = await showDialog<String>(
+      context: context,
+      builder: (_) => _CompletePaymentDialog(
+        serviceName: service?.name ?? 'Service',
+        servicePrice: service?.price ?? 0,
+      ),
+    );
+    if (paymentMethod == null) return;
+
+    // Mark appointment completed
+    final updated = Appointment(
+      id: a.id,
+      clientId: a.clientId,
+      staffId: a.staffId,
+      serviceId: a.serviceId,
+      startAt: a.startAt,
+      endAt: a.endAt,
+      status: AppointmentStatus.completed,
+      notes: a.notes,
+    );
+    await state.updateAppointment(updated);
+
+    // Build sale + line
+    final total = service?.price ?? 0.0;
+    final sale = Sale(
+      appointmentId: a.id,
+      staffId: a.staffId,
+      total: total,
+      paymentMethod: paymentMethod,
+    );
+    final lines = [
+      if (service != null)
+        SaleLine(
+          refType: 'service',
+          refId: service.id!,
+          name: service.name,
+          qty: 1,
+          unitPrice: service.price,
+        ),
+    ];
+    await state.recordSale(sale, lines);
+
+    // Fetch the saved sale to get its ID, then show receipt
+    if (!context.mounted) return;
+    final recent = await state.salesInRange(
+      DateTime.now().subtract(const Duration(seconds: 5)),
+      DateTime.now().add(const Duration(seconds: 5)),
+    );
+    final saved = recent.isNotEmpty ? recent.last : sale;
+    final savedLines = saved.id != null
+        ? await state.linesFor(saved.id!)
+        : lines;
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) =>
+              SaleReceiptModal(sale: saved, lines: savedLines)),
+    );
   }
 
   Future<void> _delete(BuildContext context, Appointment a) async {
@@ -404,6 +495,99 @@ class _StatusChip extends StatelessWidget {
           BoxDecoration(color: c.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
       child: Text(_labels[status]!,
           style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+class _CompletePaymentDialog extends StatelessWidget {
+  final String serviceName;
+  final double servicePrice;
+  const _CompletePaymentDialog({
+    required this.serviceName,
+    required this.servicePrice,
+  });
+
+  static const _methods = ['Cash', 'GCash', 'Credit Card', 'Debit Card'];
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Complete Appointment',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.purple.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.spa_outlined,
+                      color: AppColors.purple, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(serviceName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(formatPeso(servicePrice),
+                          style: const TextStyle(
+                              color: AppColors.purple,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Select payment method:',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+          const SizedBox(height: 8),
+          ..._methods.map((m) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: InkWell(
+                  onTap: () => Navigator.pop(context, m),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(m,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w500, fontSize: 14)),
+                  ),
+                ),
+              )),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Cancel',
+              style: TextStyle(color: AppColors.textMuted)),
+        ),
+      ],
     );
   }
 }

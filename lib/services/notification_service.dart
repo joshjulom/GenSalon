@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -10,6 +11,8 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+
+  static const _prefKey = 'reminders_enabled';
 
   Future<void> init() async {
     if (_initialized) return;
@@ -34,6 +37,24 @@ class NotificationService {
     await android?.requestExactAlarmsPermission();
   }
 
+  // ── Preference helpers ────────────────────────────────────────────────────
+
+  Future<bool> isRemindersEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_prefKey) ?? true;
+  }
+
+  Future<void> setRemindersEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefKey, value);
+    if (!value) {
+      await init();
+      await _plugin.cancelAll();
+    }
+  }
+
+  // ── Scheduling ────────────────────────────────────────────────────────────
+
   Future<void> scheduleAppointmentReminder({
     required int appointmentId,
     required String clientName,
@@ -41,6 +62,7 @@ class NotificationService {
     required DateTime startAt,
     int leadMinutes = 30,
   }) async {
+    if (!await isRemindersEnabled()) return;
     await init();
     final fireAt = startAt.subtract(Duration(minutes: leadMinutes));
     if (fireAt.isBefore(DateTime.now())) return;
@@ -68,7 +90,6 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
       );
     } catch (_) {
-      // Fall back to inexact if exact alarms aren't permitted
       await _plugin.zonedSchedule(
         appointmentId,
         'Upcoming appointment',

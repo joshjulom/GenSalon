@@ -46,11 +46,13 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final d = await showDatePicker(
       context: context,
-      initialDate: _date,
-      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _date.isBefore(today) ? today : _date,
+      firstDate: today,
+      lastDate: now.add(const Duration(days: 365)),
       builder: (c, child) => Theme(
         data: Theme.of(c).copyWith(
           colorScheme: Theme.of(c)
@@ -76,7 +78,21 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
         child: child!,
       ),
     );
-    if (t != null) setState(() => _time = t);
+    if (t == null) return;
+    final proposed = DateTime(
+        _date.year, _date.month, _date.day, t.hour, t.minute);
+    if (proposed.isBefore(DateTime.now())) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot book a past time. Please choose a future time.'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+      return;
+    }
+    setState(() => _time = t);
   }
 
   Future<void> _save() async {
@@ -84,6 +100,15 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
     if (_client == null || _staff == null || _service == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Please select client, staff and service.')));
+      return;
+    }
+    if (_startAt.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Appointment time is in the past. Please pick a future date and time.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
       return;
     }
     setState(() => _saving = true);
