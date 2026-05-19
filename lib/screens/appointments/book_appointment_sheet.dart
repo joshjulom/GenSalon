@@ -21,6 +21,7 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
   TimeOfDay _time = TimeOfDay.now();
   final _notesCtrl = TextEditingController();
   bool _saving = false;
+  String? _errorMessage;
 
   // Quick-add client
   final _newClientCtrl = TextEditingController();
@@ -83,41 +84,48 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
         _date.year, _date.month, _date.day, t.hour, t.minute);
     final earliest = DateTime.now().add(const Duration(minutes: 2));
     if (proposed.isBefore(earliest)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Appointment time must be at least 2 minutes from now.'),
-            backgroundColor: Color(0xFFEF4444),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+      setState(() => _errorMessage =
+          'Appointment time must be at least 2 minutes from now.');
       return;
     }
-    setState(() => _time = t);
+    setState(() {
+      _time = t;
+      _errorMessage = null;
+    });
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_client == null || _staff == null || _service == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Please select client, staff and service.')));
+      setState(() => _errorMessage = 'Please select client, staff and service.');
       return;
     }
     final earliest = DateTime.now().add(const Duration(minutes: 2));
     if (_startAt.isBefore(earliest)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Appointment time must be at least 2 minutes from now.'),
-          backgroundColor: Color(0xFFEF4444),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      setState(() => _errorMessage =
+          'Appointment time must be at least 2 minutes from now.');
       return;
     }
-    setState(() => _saving = true);
+
+    // Duplicate check — client already has a scheduled appointment
+    final existing = context
+        .read<AppState>()
+        .appointments
+        .where((a) =>
+            a.clientId == _client!.id! &&
+            a.status == AppointmentStatus.scheduled)
+        .toList();
+    if (existing.isNotEmpty) {
+      final dup = existing.first;
+      final dupDate =
+          '${dup.startAt.day}/${dup.startAt.month}/${dup.startAt.year} '
+          '${TimeOfDay.fromDateTime(dup.startAt).format(context)}';
+      setState(() => _errorMessage =
+          '${_client!.name} already has a scheduled appointment on $dupDate.');
+      return;
+    }
+
+    setState(() { _saving = true; _errorMessage = null; });
     final appt = Appointment(
       clientId: _client!.id!,
       staffId: _staff!.id!,
@@ -191,7 +199,7 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
                         .map((c) => DropdownMenuItem(
                             value: c, child: Text(c.name)))
                         .toList(),
-                    onChanged: (v) => setState(() => _client = v),
+                    onChanged: (v) => setState(() { _client = v; _errorMessage = null; }),
                     validator: (v) => v == null ? 'Required' : null,
                   ),
                 ),
@@ -288,6 +296,37 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
                 maxLines: 2,
               ),
               const SizedBox(height: 20),
+
+              // Inline error banner
+              if (_errorMessage != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: const Color(0xFFEF4444).withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Color(0xFFEF4444), size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                              color: Color(0xFFEF4444), fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               SizedBox(
                 width: double.infinity,
