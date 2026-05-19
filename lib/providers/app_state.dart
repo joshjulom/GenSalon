@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../db/database_helper.dart';
 import '../models/models.dart';
 import '../repositories/repositories.dart';
 
@@ -176,4 +177,9 @@ class AppState extends ChangeNotifier {
   Future<List<SaleLine>> linesFor(int saleId) => _sales.linesFor(saleId);
 
   Future<List<MapEntry<DateTime, double>>> last7Days() => _sales.last7Days();
+
+  Future<void> clearAll() async {
+    await DatabaseHelper.instance.clearAllData();
+    await loadAll();
+  }
 }

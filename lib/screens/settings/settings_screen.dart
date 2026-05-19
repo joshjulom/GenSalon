@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/app_state.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -141,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmClear(BuildContext context) async {
-    await showDialog(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -150,14 +152,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'This will permanently delete all clients, staff, appointments and sales. This cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Clear'),
           ),
         ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+    await context.read<AppState>().clearAll();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('All data cleared successfully.'),
+        duration: Duration(seconds: 3),
       ),
     );
   }

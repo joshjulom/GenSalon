@@ -440,11 +440,11 @@ class _ApptCard extends StatelessWidget {
         ? await state.linesFor(saved.id!)
         : lines;
     if (!context.mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (_) =>
-              SaleReceiptModal(sale: saved, lines: savedLines)),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SaleReceiptModal(sale: saved, lines: savedLines),
     );
   }
 

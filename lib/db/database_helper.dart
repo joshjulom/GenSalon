@@ -130,4 +130,16 @@ class DatabaseHelper {
     }
     await batch.commit(noResult: true);
   }
+
+  Future<void> clearAllData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('sale_lines');
+      await txn.delete('sales');
+      await txn.delete('appointments');
+      await txn.delete('items');
+      await txn.delete('clients');
+      await txn.delete('staff');
+    });
+  }
 }

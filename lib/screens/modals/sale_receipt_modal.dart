@@ -324,9 +324,9 @@ class SaleReceiptModal extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _exportPdf(context),
-                        icon: const Icon(Icons.picture_as_pdf_outlined,
+                        icon: const Icon(Icons.print_outlined,
                             color: AppColors.purple),
-                        label: const Text('Export PDF',
+                        label: const Text('Print Receipt',
                             style: TextStyle(color: AppColors.purple)),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: AppColors.purple),
