@@ -215,6 +215,90 @@ class AppointmentsScreen extends StatelessWidget {
         ),
       );
 
+  Future<void> _completeWithSale(BuildContext context, Appointment a) async {
+    final state = context.read<AppState>();
+
+    Service? service;
+    String? clientName;
+    String? staffName;
+    try {
+      service = state.services.firstWhere((s) => s.id == a.serviceId);
+    } catch (_) {}
+    try {
+      clientName = state.clients.firstWhere((c) => c.id == a.clientId).name;
+    } catch (_) {}
+    try {
+      staffName = state.staffList.firstWhere((s) => s.id == a.staffId).name;
+    } catch (_) {}
+
+    final paymentMethod = await showDialog<String>(
+      context: context,
+      builder: (_) => _CompletePaymentDialog(
+        serviceName: service?.name ?? 'Service',
+        servicePrice: service?.price ?? 0,
+      ),
+    );
+    if (paymentMethod == null) return;
+
+    // Mark appointment completed
+    final updated = Appointment(
+      id: a.id,
+      clientId: a.clientId,
+      staffId: a.staffId,
+      serviceId: a.serviceId,
+      startAt: a.startAt,
+      endAt: a.endAt,
+      status: AppointmentStatus.completed,
+      notes: a.notes,
+    );
+    await state.updateAppointment(updated);
+
+    // Build sale + line
+    final total = service?.price ?? 0.0;
+    final sale = Sale(
+      appointmentId: a.id,
+      staffId: a.staffId,
+      total: total,
+      paymentMethod: paymentMethod,
+    );
+    final lines = [
+      if (service != null)
+        SaleLine(
+          refType: 'service',
+          refId: service.id!,
+          name: service.name,
+          qty: 1,
+          unitPrice: service.price,
+        ),
+    ];
+    await state.recordSale(sale, lines);
+
+    // Fetch the saved sale (with its DB id), then show receipt
+    // Use AppointmentsScreen context — it remains mounted even after the card is removed
+    if (!context.mounted) return;
+    final recent = await state.salesInRange(
+      DateTime.now().subtract(const Duration(seconds: 5)),
+      DateTime.now().add(const Duration(seconds: 5)),
+    );
+    final saved = recent.isNotEmpty ? recent.last : sale;
+    final savedLines =
+        saved.id != null ? await state.linesFor(saved.id!) : lines;
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => SaleReceiptModal(
+        sale: saved,
+        lines: savedLines,
+        clientName: clientName,
+        staffName: staffName,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -249,7 +333,10 @@ class AppointmentsScreen extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (_, i) {
                   if (i == 0) return _headerRow(context);
-                  return _ApptCard(appt: appts[i - 1]);
+                  return _ApptCard(
+                    appt: appts[i - 1],
+                    onComplete: (a) => _completeWithSale(context, a),
+                  );
                 },
               ),
       ),
@@ -259,7 +346,8 @@ class AppointmentsScreen extends StatelessWidget {
 
 class _ApptCard extends StatelessWidget {
   final Appointment appt;
-  const _ApptCard({required this.appt});
+  final Future<void> Function(Appointment) onComplete;
+  const _ApptCard({required this.appt, required this.onComplete});
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +451,7 @@ class _ApptCard extends StatelessWidget {
 
   Future<void> _updateStatus(BuildContext context, Appointment a, AppointmentStatus s) async {
     if (s == AppointmentStatus.completed) {
-      await _completeWithSale(context, a);
+      await onComplete(a);
       return;
     }
     final updated = Appointment(
@@ -377,75 +465,6 @@ class _ApptCard extends StatelessWidget {
       notes: a.notes,
     );
     await context.read<AppState>().updateAppointment(updated);
-  }
-
-  Future<void> _completeWithSale(BuildContext context, Appointment a) async {
-    final state = context.read<AppState>();
-
-    Service? service;
-    try {
-      service = state.services.firstWhere((s) => s.id == a.serviceId);
-    } catch (_) {}
-
-    final paymentMethod = await showDialog<String>(
-      context: context,
-      builder: (_) => _CompletePaymentDialog(
-        serviceName: service?.name ?? 'Service',
-        servicePrice: service?.price ?? 0,
-      ),
-    );
-    if (paymentMethod == null) return;
-
-    // Mark appointment completed
-    final updated = Appointment(
-      id: a.id,
-      clientId: a.clientId,
-      staffId: a.staffId,
-      serviceId: a.serviceId,
-      startAt: a.startAt,
-      endAt: a.endAt,
-      status: AppointmentStatus.completed,
-      notes: a.notes,
-    );
-    await state.updateAppointment(updated);
-
-    // Build sale + line
-    final total = service?.price ?? 0.0;
-    final sale = Sale(
-      appointmentId: a.id,
-      staffId: a.staffId,
-      total: total,
-      paymentMethod: paymentMethod,
-    );
-    final lines = [
-      if (service != null)
-        SaleLine(
-          refType: 'service',
-          refId: service.id!,
-          name: service.name,
-          qty: 1,
-          unitPrice: service.price,
-        ),
-    ];
-    await state.recordSale(sale, lines);
-
-    // Fetch the saved sale to get its ID, then show receipt
-    if (!context.mounted) return;
-    final recent = await state.salesInRange(
-      DateTime.now().subtract(const Duration(seconds: 5)),
-      DateTime.now().add(const Duration(seconds: 5)),
-    );
-    final saved = recent.isNotEmpty ? recent.last : sale;
-    final savedLines = saved.id != null
-        ? await state.linesFor(saved.id!)
-        : lines;
-    if (!context.mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => SaleReceiptModal(sale: saved, lines: savedLines),
-    );
   }
 
   Future<void> _delete(BuildContext context, Appointment a) async {

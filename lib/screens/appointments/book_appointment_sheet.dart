@@ -81,12 +81,15 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
     if (t == null) return;
     final proposed = DateTime(
         _date.year, _date.month, _date.day, t.hour, t.minute);
-    if (proposed.isBefore(DateTime.now())) {
+    final earliest = DateTime.now().add(const Duration(minutes: 2));
+    if (proposed.isBefore(earliest)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cannot book a past time. Please choose a future time.'),
+            content: Text(
+                'Appointment time must be at least 2 minutes from now.'),
             backgroundColor: Color(0xFFEF4444),
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -102,11 +105,14 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
           content: Text('Please select client, staff and service.')));
       return;
     }
-    if (_startAt.isBefore(DateTime.now())) {
+    final earliest = DateTime.now().add(const Duration(minutes: 2));
+    if (_startAt.isBefore(earliest)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Appointment time is in the past. Please pick a future date and time.'),
+          content: Text(
+              'Appointment time must be at least 2 minutes from now.'),
           backgroundColor: Color(0xFFEF4444),
+          duration: Duration(seconds: 3),
         ),
       );
       return;
